@@ -86,3 +86,35 @@ Estos mapeos los implemente en el script `generar-compose.py`, asegurando que to
 - Agregué un archivo `.dockerignore` tanto para el cliente como para el servidor. En estos agregué el archivo de configuración para que no se copie en el Dockerfile.
 
 </details>
+
+<details>
+
+<summary>Ejercicio 3</summary>
+
+### Ejercicio N°3
+
+Cree el archivo `validar-echo-server.sh` que permite verificar el correcto funcionamiento del servidor.
+Esto se hace mediante el comando `nc (netcat)`.
+
+#### Respuestas según validación:
+
+- **Exitosa:**
+  ```
+  action: test_echo_server | result: success
+  ```
+- **Error:**
+  ```
+  action: test_echo_server | result: fail
+  ```
+
+#### Cambios adicionales:
+
+- Hice cambios en la validación de cantidad de clientes posibles en la generación del docker compose, ya que no se permitian 0 clientes previamente.
+
+#### Uso
+
+```bash
+./validar-echo-server.sh
+```
+
+</details>
