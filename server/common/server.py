@@ -84,6 +84,7 @@ class Server:
         Function blocks until a connection to a client is made.
         Then connection created is printed and returned
         """
+        logging.info("action: accept_connections | result: in_progress")
         try:
             if not self._server_is_running or self._server_socket is None:
                 logging.info(
