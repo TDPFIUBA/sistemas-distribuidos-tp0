@@ -26,7 +26,7 @@ class Server:
     def __set_up_signal_handler(self):
         signal.signal(signal.SIGTERM, self.__handle_sigterm_signal)
 
-    def __handle_sigterm_signal(self):
+    def __handle_sigterm_signal(self, signum, frame):
         """
         Handle SIGTERM signal
 
