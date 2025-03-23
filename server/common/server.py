@@ -85,7 +85,7 @@ class Server:
         Then connection created is printed and returned
         """
         try:
-            if not self._server_running or self._server_socket is None:
+            if not self._server_is_running or self._server_socket is None:
                 logging.info(
                     "action: accept_connections | result: fail | details: server not running"
                 )
