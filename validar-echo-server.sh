@@ -11,7 +11,7 @@ IMAGE="busybox"
 
 RESPONSE=$(docker run --rm --network $NETWORK_NAME $IMAGE sh -c "echo '$TEST_MESSAGE' | nc -w $NETCAT_TIMEOUT $SERVER_NAME $SERVER_PORT 2>/dev/null")
 
-if [ "$RESPONSE" == "$TEST_MESSAGE" ]; then
+if [ "$RESPONSE" = "$TEST_MESSAGE" ]; then
     echo "action: test_echo_server | result: success"
 else
     echo "action: test_echo_server | result: fail"
