@@ -58,3 +58,31 @@ Generar un archivo `docker-compose-dev.yaml` con `5` clientes:
 ```
 
 </details>
+
+<details>
+
+<summary>Ejercicio 2</summary>
+
+### Ejercicio N°2
+
+En este ejercicio mapeo los volúmenes del cliente y del servidor para poder modificar sus archivos de configuración sin necesidad de reconstruir las imágenes de Docker.
+
+#### Mapeos de volúmenes:
+
+- **Cliente:**
+  ```yaml
+  ./client/config.yaml:/config.yaml
+  ```
+- **Servidor:**
+  ```yaml
+  ./server/config.ini:/config.ini
+  ```
+
+Estos mapeos los implemente en el script `generar-compose.py`, asegurando que todos los YAML generados en el futuro los incluyan automáticamente.
+
+#### Cambios adicionales:
+
+- Eliminé variables de entorno del archivo `generar-compose.yml`, ya que ahora la configuración se realiza a través de los archivos `config.*`.
+- Agregué un archivo `.dockerignore` tanto para el cliente como para el servidor. En estos agregué el archivo de configuración para que no se copie en el Dockerfile.
+
+</details>
