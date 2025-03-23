@@ -50,10 +50,10 @@ class Server:
         communication with a client. After client with communucation
         finishes, servers starts to accept new connections again
         """
-
         while self._server_is_running:
             self._client_socket = self.__accept_new_connection()
-            self.__handle_client_connection()
+            if self._client_socket:
+                self.__handle_client_connection()
 
     def __handle_client_connection(self):
         """
@@ -84,8 +84,17 @@ class Server:
         Function blocks until a connection to a client is made.
         Then connection created is printed and returned
         """
-
-        logging.info("action: accept_connections | result: in_progress")
-        c, addr = self._server_socket.accept()
-        logging.info(f"action: accept_connections | result: success | ip: {addr[0]}")
-        return c
+        try:
+            if not self._server_running or self._server_socket is None:
+                logging.info(
+                    "action: accept_connections | result: fail | details: server not running"
+                )
+                return None
+            c, addr = self._server_socket.accept()
+            logging.info(
+                f"action: accept_connections | result: success | ip: {addr[0]}"
+            )
+            return c
+        except OSError as e:
+            logging.error(f"action: accept_connections | result: fail | error: {e}")
+            return None
