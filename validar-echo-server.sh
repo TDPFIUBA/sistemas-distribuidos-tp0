@@ -9,7 +9,10 @@ NETCAT_TIMEOUT=2
 # Reuse busybox image (used in client Dockerfile)
 IMAGE="busybox"
 
-RESPONSE=$(docker run --rm --network $NETWORK_NAME $IMAGE sh -c "echo '$TEST_MESSAGE' | nc -w $NETCAT_TIMEOUT $SERVER_NAME $SERVER_PORT 2>/dev/null")
+DOCKER_CMD="docker run --rm --network $NETWORK_NAME $IMAGE"
+NETCAT_CMD="nc -w $NETCAT_TIMEOUT $SERVER_NAME $SERVER_PORT 2>/dev/null"
+
+RESPONSE=$($DOCKER_CMD sh -c "echo '$TEST_MESSAGE' | $NETCAT_CMD")
 
 if [ "$RESPONSE" = "$TEST_MESSAGE" ]; then
     echo "action: test_echo_server | result: success"
