@@ -95,7 +95,7 @@ def validate_argv_qty():
 def validate_clients_qty():
     try:
         clients_qty = int(sys.argv[ARGV_CLIENTS_QTY_IDX])
-        if clients_qty <= 0:
+        if clients_qty < 0:
             raise Exception
         return clients_qty
     except IndexError:
