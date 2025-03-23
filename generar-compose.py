@@ -32,7 +32,7 @@ def generate_server_config(extra_conf=DEFAULT_EXTRA_CONF):
         "container_name": "server",
         "image": "server:latest",
         "entrypoint": "python3 /main.py",
-        "environment": ["PYTHONUNBUFFERED=1", "LOGGING_LEVEL=DEBUG"],
+        "environment": ["PYTHONUNBUFFERED=1"],
         **extra_conf,
     }
 
@@ -42,7 +42,7 @@ def generate_client_config(client_n, extra_conf=DEFAULT_EXTRA_CONF):
         "container_name": f"client{client_n}",
         "image": "client:latest",
         "entrypoint": "/client",
-        "environment": [f"CLI_ID={client_n}", "CLI_LOG_LEVEL=DEBUG"],
+        "environment": [f"CLI_ID={client_n}"],
         **extra_conf,
     }
 
