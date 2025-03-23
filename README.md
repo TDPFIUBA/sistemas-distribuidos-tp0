@@ -118,3 +118,48 @@ Esto se hace mediante el comando `nc (netcat)`.
 ```
 
 </details>
+
+<details>
+
+<summary>Ejercicio 4</summary>
+
+### Ejercicio N°4
+
+Agregué el manejo de la señal `SIGTERM` en el cliente como también en el servidor, haciendo que la aplicación termine de forma graceful.
+
+#### Implementaciones
+
+##### Servidor
+
+Agregué el handler de la señal a la clase del servidor, donde al recibirla, este ejecuta el método `__handle_sigterm_signal` y libera los sockets.
+
+```python
+signal.signal(signal.SIGTERM, self.__handle_sigterm_signal)
+```
+
+##### Cliente
+
+Agregué el handler de la señal al main file, donde se crea un channel que recibe señales.
+
+```go
+signalChannel := make(chan os.Signal, 1)
+```
+
+Este channel se utiliza para enviar señales `SIGTERM`
+
+```go
+signal.Notify(signalChannel, syscall.SIGTERM)
+```
+
+Se crea una goroutine para recibir las señales y cerrar las conexiones del cliente
+
+```go
+go func() {
+  <-signalChannel
+  log.Infof("action: sigterm_received | result: success | client_id: %v", clientConfig.ID)
+  client.CloseConnection()
+  os.Exit(0)
+}()
+```
+
+</details>
