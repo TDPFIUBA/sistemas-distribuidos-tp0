@@ -33,6 +33,7 @@ def generate_server_config(extra_conf=DEFAULT_EXTRA_CONF):
         "image": "server:latest",
         "entrypoint": "python3 /main.py",
         "environment": ["PYTHONUNBUFFERED=1"],
+        "volumes": ["./server/config.ini:/config.ini"],
         **extra_conf,
     }
 
@@ -43,6 +44,7 @@ def generate_client_config(client_n, extra_conf=DEFAULT_EXTRA_CONF):
         "image": "client:latest",
         "entrypoint": "/client",
         "environment": [f"CLI_ID={client_n}"],
+        "volumes": ["./client/config.yaml:/config.yaml"],
         **extra_conf,
     }
 
