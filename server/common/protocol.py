@@ -9,17 +9,17 @@ class Protocol:
     ENCODING = 'utf-8'
 
     @staticmethod
-    def bytes_to_str(data):
+    def bytes_to_str(data: bytes) -> str:
         """Converts bytes to string"""
         return data.decode(Protocol.ENCODING)
 
     @staticmethod
-    def str_to_bytes(data):
+    def str_to_bytes(data: str) -> bytes:
         """Converts string to bytes"""
         return data.encode(Protocol.ENCODING)
     
     @staticmethod
-    def serialize_response(success, message):
+    def serialize_response(success: bool, message: str) -> bytes:
         """Serializes a response message to be sent to the client"""
         result = "success" if success else "fail"
         response = f"RESULT={result},MESSAGE={message}"
@@ -27,7 +27,7 @@ class Protocol:
         return response + Protocol.END_MESSAGE
     
     @staticmethod
-    def deserialize_bet(data):
+    def deserialize_bet(data: bytes) -> Bet:
         """Deserializes bet data from a bytes/string format KEY=VALUE,KEY=VALUE,..."""
         try:
             data = Protocol.bytes_to_str(data)
@@ -53,7 +53,7 @@ class Protocol:
             return None
     
     @staticmethod
-    def send_message(sock, data):
+    def send_message(sock, data: bytes) -> int:
         """Send message"""
         data_qty_sent = 0
         data_qty = len(data)
@@ -67,7 +67,7 @@ class Protocol:
         return data_qty_sent
     
     @staticmethod
-    def receive_message(sock):
+    def receive_message(sock) -> bytes:
         """Receive message until end is found"""
         data = b''
         while True:
