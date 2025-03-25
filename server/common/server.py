@@ -1,6 +1,9 @@
 import socket
 import logging
 import signal
+from common.protocol import Protocol
+from common.utils import Bet, store_bets
+from typing import Optional
 
 
 class Server:
@@ -63,19 +66,41 @@ class Server:
         client socket will also be closed
         """
         try:
-            # TODO: Modify the receive to avoid short-reads
-            msg = self._client_socket.recv(1024).rstrip().decode("utf-8")
+            msg = Protocol.receive_message(self._client_socket)
             addr = self._client_socket.getpeername()
             logging.info(
-                f"action: receive_message | result: success | ip: {addr[0]} | msg: {msg}"
+                f"action: receive_message | result: success | ip: {addr[0]}  | msg: {msg}"
             )
 
-            # TODO: Modify the send to avoid short-writes
-            self._client_socket.send("{}\n".format(msg).encode("utf-8"))
-        except OSError as e:
-            logging.error("action: receive_message | result: fail | error: {e}")
+            bet = Protocol.deserialize_bet(msg)
+            bet_saved, bet_msg = self.__process_bet(bet)
+
+            response = Protocol.serialize_response(bet_saved, bet_msg)
+            Protocol.send_message(self._client_socket, response)
+
+        except Exception as e:
+            logging.error(f"action: receive_message | result: fail | error: {e}")
+            try:
+                error_response = Protocol.serialize_response(False, f"Error processing bet: {str(e)}")
+                Protocol.send_message(self._client_socket, error_response)
+            except:
+                logging.error("action: send_error_response | result: fail")
         finally:
             self._client_socket = self.__release_socket(self._client_socket)
+
+    def __process_bet(self, bet: Optional[Bet]):
+        """
+        Process a bet
+
+        If the bet is valid, it is stored in the file system.
+        If the bet is not valid, an error message is returned.
+        """
+        if not bet:
+            return False, "Invalid bet data"
+
+        store_bets([bet])
+        logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
+        return True, "Bet successfully registered"
 
     def __accept_new_connection(self):
         """

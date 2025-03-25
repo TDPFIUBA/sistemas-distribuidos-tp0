@@ -4,7 +4,7 @@ from configparser import ConfigParser
 from common.server import Server
 import logging
 import os
-
+import sys
 
 def initialize_config():
     """ Parse env variables or config file to find program config params
@@ -35,21 +35,27 @@ def initialize_config():
 
 
 def main():
-    config_params = initialize_config()
-    logging_level = config_params["logging_level"]
-    port = config_params["port"]
-    listen_backlog = config_params["listen_backlog"]
+    try:
+        config_params = initialize_config()
+        logging_level = config_params["logging_level"]
+        port = config_params["port"]
+        listen_backlog = config_params["listen_backlog"]
 
-    initialize_log(logging_level)
+        initialize_log(logging_level)
 
-    # Log config parameters at the beginning of the program to verify the configuration
-    # of the component
-    logging.debug(f"action: config | result: success | port: {port} | "
-                  f"listen_backlog: {listen_backlog} | logging_level: {logging_level}")
+        # Log config parameters at the beginning of the program to verify the configuration
+        # of the component
+        logging.debug(f"action: config | result: success | port: {port} | "
+                    f"listen_backlog: {listen_backlog} | logging_level: {logging_level}")
 
-    # Initialize server and start server loop
-    server = Server(port, listen_backlog)
-    server.run()
+        # Initialize server and start server loop
+        server = Server(port, listen_backlog)
+        server.run()
+    except Exception as e:
+        logging.error(f"action: main | result: fail | error: {e}")
+        sys.exit(1)
+    finally:
+        logging.info("action: shutdown | result: success")
 
 def initialize_log(logging_level):
     """

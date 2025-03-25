@@ -1,8 +1,6 @@
 package common
 
 import (
-	"bufio"
-	"fmt"
 	"net"
 	"time"
 
@@ -17,12 +15,18 @@ type ClientConfig struct {
 	ServerAddress string
 	LoopAmount    int
 	LoopPeriod    time.Duration
+	FirstName     string
+	LastName      string
+	Document      string
+	Birthdate     string
+	Number        string
 }
 
-// Client Entity that encapsulates how
+// Client Entity that encapsulates client behavior
 type Client struct {
-	config ClientConfig
-	conn   net.Conn
+	config   ClientConfig
+	conn     net.Conn
+	protocol *Protocol
 }
 
 // NewClient Initializes a new client receiving the configuration
@@ -37,7 +41,7 @@ func NewClient(config ClientConfig) *Client {
 // CreateClientSocket Initializes client socket. In case of
 // failure, error is printed in stdout/stderr and exit 1
 // is returned
-func (c *Client) createClientSocket() error {
+func (c *Client) CreateClientSocket() error {
 	conn, err := net.Dial("tcp", c.config.ServerAddress)
 	if err != nil {
 		log.Criticalf(
@@ -48,6 +52,7 @@ func (c *Client) createClientSocket() error {
 		return err
 	}
 	c.conn = conn
+	c.protocol = NewProtocol(c.conn)
 	return nil
 }
 
@@ -58,42 +63,62 @@ func (c *Client) CloseConnection() {
 	}
 }
 
+func (c *Client) SendBet() error {
+	message := NewBetMessage(
+		c.config.ID,
+		c.config.FirstName,
+		c.config.LastName,
+		c.config.Document,
+		c.config.Birthdate,
+		c.config.Number,
+	)
+
+	return c.protocol.SendMessage(message.Serialize())
+}
+
 // StartClientLoop Send messages to the client until some time threshold is met
 func (c *Client) StartClientLoop() {
 	// There is an autoincremental msgID to identify every message sent
 	// Messages if the message amount threshold has not been surpassed
 	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
-		// Create the connection the server in every loop iteration. Send an
-		if err := c.createClientSocket(); err != nil {
+
+		if err := c.CreateClientSocket(); err != nil {
 			return
 		}
 
-		// TODO: Modify the send to avoid short-write
-		fmt.Fprintf(
-			c.conn,
-			"[CLIENT %v] Message N°%v\n",
-			c.config.ID,
-			msgID,
-		)
-		msg, err := bufio.NewReader(c.conn).ReadString('\n')
-		c.CloseConnection()
+		if err := c.SendBet(); err != nil {
+			log.Errorf("action: send_bet | result: fail | client_id: %v | error: %v",
+				c.config.ID,
+				err,
+			)
+			c.CloseConnection()
+			return
+		}
 
+		responseData, err := c.protocol.ReceiveMessage()
 		if err != nil {
 			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
 				c.config.ID,
 				err,
 			)
+			c.CloseConnection()
 			return
 		}
 
-		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
-			c.config.ID,
-			msg,
+		responseMsg := ParseResponseMessage(responseData)
+		log.Debugf("action: bet_response | result: %s | message: %s",
+			responseMsg.Result,
+			responseMsg.Message)
+
+		log.Infof("action: apuesta_enviada | result: success | dni: %v | numero: %v",
+			c.config.Document,
+			c.config.Number,
 		)
+
+		c.CloseConnection()
 
 		// Wait a time between sending one message and the next one
 		time.Sleep(c.config.LoopPeriod)
-
 	}
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 }
