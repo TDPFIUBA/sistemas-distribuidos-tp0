@@ -25,9 +25,18 @@ var log = logging.MustGetLogger("log")
 func InitConfig() (*viper.Viper, error) {
 	v := viper.New()
 
-	// Configure viper to read env variables with the CLI_ prefix
 	v.AutomaticEnv()
+
+	// Add bet information env variables
+	v.BindEnv("nombre")
+	v.BindEnv("apellido")
+	v.BindEnv("documento")
+	v.BindEnv("nacimiento")
+	v.BindEnv("numero")
+
+	// Configure viper to read env variables with the CLI_ prefix
 	v.SetEnvPrefix("cli")
+
 	// Use a replacer to replace env variables underscores with points. This let us
 	// use nested configurations in the config file and at the same time define
 	// env variables for the nested configurations
@@ -110,6 +119,11 @@ func main() {
 		ID:            v.GetString("id"),
 		LoopAmount:    v.GetInt("loop.amount"),
 		LoopPeriod:    v.GetDuration("loop.period"),
+		FirstName:     v.GetString("nombre"),
+		LastName:      v.GetString("apellido"),
+		Document:      v.GetString("documento"),
+		Birthdate:     v.GetString("nacimiento"),
+		Number:        v.GetString("numero"),
 	}
 
 	client := common.NewClient(clientConfig)
@@ -123,7 +137,6 @@ func main() {
 		client.CloseConnection()
 		os.Exit(0)
 	}()
-
 
 	client.StartClientLoop()
 }
