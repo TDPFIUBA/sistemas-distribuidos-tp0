@@ -163,3 +163,108 @@ go func() {
 ```
 
 </details>
+
+## Parte 2: Repaso de Comunicaciones
+
+#### Dependencias
+
+- Python >= 3.13
+
+#### Ejercicios
+
+<details>
+
+<summary>Ejercicio 5</summary>
+
+### Ejercicio N°5:
+
+En este ejercicio implemente la comunicacion cliente-servidor, en la cual el cliente le envia al servidor los datos necesarios para realizar una apuesta, y el servidor lo procesa.
+
+En primer lugar, defini la comunicación con el protocolo.
+
+- Los datos para realizar una apuesta son: `NOMBRE`, `APELLIDO`, `DOCUMENTO`, `NACIMIENTO` y `NUMERO`.
+- Estos datos se obtienen por medio de variables de entorno.
+
+Para esto, se agregaron los valores DEFAULT de la consigna en el script que genera el docker compose:
+
+```python
+"environment": [f"CLI_ID={client_n}", "NOMBRE=Santiago Lionel","APELLIDO=Lorca","DOCUMENTO=30904465","NACIMIENTO=1999-03-17","NUMERO=7574"],
+```
+
+Los datos se envian del cliente hacia el servidor en el siguiente formato:
+
+```bash
+AGENCY=%s,FIRST_NAME=%s,LAST_NAME=%s,DOCUMENT=%s,BIRTHDATE=%s,NUMBER=%s\n
+```
+
+Una vez recibido del lado del servidor, la apuesta se guarda, y se responde con un mensaje:
+
+```bash
+RESULT=%s,MESSAGE=%s\n
+```
+
+Estos mensajes se reciben y se envian mediante sockets, teniendo en cuenta los short writes y short reads.
+
+Para implementar esta logica, el `servidor` tiene una clase `Protocol` que maneja y encampsula esto:
+
+```python
+class Protocol
+  def send_message(sock, data: bytes)
+  def receive_message(sock)
+```
+
+```python
+class ProtocolMessage
+  def bytes_to_str(data: bytes)
+  def str_to_bytes(data: str)
+  def serialize_response(success: bool, message: str)
+  def deserialize_bet(data: bytes)
+```
+
+Del lado del `cliente`, lo mismo, manejado con structs y funciones:
+
+```go
+type Protocol struct { // size=16 (0x10)
+    conn net.Conn
+}
+func (p *Protocol) ReceiveMessage() (string, error)
+func (p *Protocol) SendMessage(data []byte) error
+```
+
+```go
+type BetMessage struct { // size=96 (0x60)
+    Agency    string
+    FirstName string
+    LastName  string
+    Document  string
+    Birthdate string
+    Number    string
+}
+func (m *BetMessage) Serialize() []byte
+```
+
+#### Ejemplo de uso:
+
+Generar docker compose con un servidor y un cliente (con variables de entorno)
+
+```bash
+./generar-compose.sh docker-compose-dev.yaml 1
+```
+
+Levantar los servicios con Makefile
+
+```bash
+make docker-compose-up
+```
+
+En los logs se podran observar acciones del estilo:
+
+- `action: apuesta_enviada`
+
+  Generado cuando el cliente recibe la confirmación del servidor al enviar una apuesta
+
+- `action: apuesta_almacenada`
+
+  Generado cuando el servidor almacena la apuesta
+
+</details>
