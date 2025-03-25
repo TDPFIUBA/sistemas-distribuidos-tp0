@@ -7,7 +7,6 @@ from common.utils import Bet, store_bets
 from typing import Optional
 
 
-
 class Server:
     def __init__(self, port, listen_backlog):
         """Server initialization"""
@@ -83,7 +82,9 @@ class Server:
         except Exception as e:
             logging.error(f"action: receive_message | result: fail | error: {e}")
             try:
-                error_response = ProtocolMessage.serialize_response(False, f"Error processing bet: {str(e)}")
+                error_response = ProtocolMessage.serialize_response(
+                    False, f"Error processing bet: {str(e)}"
+                )
                 Protocol.send_message(self._client_socket, error_response)
             except:
                 logging.error("action: send_error_response | result: fail")
@@ -101,7 +102,9 @@ class Server:
             return False, "Invalid bet data"
 
         store_bets([bet])
-        logging.info(f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}")
+        logging.info(
+            f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}"
+        )
         return True, "Bet successfully registered"
 
     def __accept_new_connection(self):
