@@ -1,9 +1,11 @@
 import socket
 import logging
 import signal
+from common.protocol_message import ProtocolMessage
 from common.protocol import Protocol
 from common.utils import Bet, store_bets
 from typing import Optional
+
 
 
 class Server:
@@ -72,16 +74,16 @@ class Server:
                 f"action: receive_message | result: success | ip: {addr[0]}  | msg: {msg}"
             )
 
-            bet = Protocol.deserialize_bet(msg)
+            bet = ProtocolMessage.deserialize_bet(msg)
             bet_saved, bet_msg = self.__process_bet(bet)
 
-            response = Protocol.serialize_response(bet_saved, bet_msg)
+            response = ProtocolMessage.serialize_response(bet_saved, bet_msg)
             Protocol.send_message(self._client_socket, response)
 
         except Exception as e:
             logging.error(f"action: receive_message | result: fail | error: {e}")
             try:
-                error_response = Protocol.serialize_response(False, f"Error processing bet: {str(e)}")
+                error_response = ProtocolMessage.serialize_response(False, f"Error processing bet: {str(e)}")
                 Protocol.send_message(self._client_socket, error_response)
             except:
                 logging.error("action: send_error_response | result: fail")
