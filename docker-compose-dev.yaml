@@ -6,7 +6,7 @@ services:
     entrypoint: python3 /main.py
     environment:
       - PYTHONUNBUFFERED=1
-      - CLI_QTY=2
+      - CLI_QTY=5
     volumes:
       - ./server/config.ini:/config.ini
     networks: &id001
@@ -17,7 +17,7 @@ services:
     entrypoint: /client
     environment:
       - CLI_ID=1
-      - CLI_QTY=2
+      - CLI_QTY=5
     volumes:
       - ./client/config.yaml:/config.yaml
       - ./.data/agency-1.csv:/data/agency.csv
@@ -30,10 +30,46 @@ services:
     entrypoint: /client
     environment:
       - CLI_ID=2
-      - CLI_QTY=2
+      - CLI_QTY=5
     volumes:
       - ./client/config.yaml:/config.yaml
       - ./.data/agency-2.csv:/data/agency.csv
+    networks: *id001
+    depends_on: *id002
+  client3:
+    container_name: client3
+    image: client:latest
+    entrypoint: /client
+    environment:
+      - CLI_ID=3
+      - CLI_QTY=5
+    volumes:
+      - ./client/config.yaml:/config.yaml
+      - ./.data/agency-3.csv:/data/agency.csv
+    networks: *id001
+    depends_on: *id002
+  client4:
+    container_name: client4
+    image: client:latest
+    entrypoint: /client
+    environment:
+      - CLI_ID=4
+      - CLI_QTY=5
+    volumes:
+      - ./client/config.yaml:/config.yaml
+      - ./.data/agency-4.csv:/data/agency.csv
+    networks: *id001
+    depends_on: *id002
+  client5:
+    container_name: client5
+    image: client:latest
+    entrypoint: /client
+    environment:
+      - CLI_ID=5
+      - CLI_QTY=5
+    volumes:
+      - ./client/config.yaml:/config.yaml
+      - ./.data/agency-5.csv:/data/agency.csv
     networks: *id001
     depends_on: *id002
 networks:
