@@ -133,7 +133,7 @@ class Server:
                 return
             
             winners = self._winners.get(c_id, [])
-            response = ProtocolMessage.serialize_response(False, f"{len(winners)}")
+            response = ProtocolMessage.serialize_response(True, f"{len(winners)}")
             Protocol.send_message(self._client_socket, response)
             
         except Exception as e:

@@ -244,7 +244,7 @@ func (c *Client) GetWinners() (bool, error) {
 
 	winnersMsg := ParseResponseMessage(responseData)
 	if winnersMsg.Result == "success" {
-		log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d",
+		log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %s",
 			winnersMsg.Message)
 
 		return true, nil
