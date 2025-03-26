@@ -380,3 +380,153 @@ En los logs se podran observar acciones del estilo:
   Generado cuando en el servidor se detecta un error con alguna de las apuestas
 
 </details>
+
+<details>
+
+<summary>Ejercicio 7</summary>
+
+### Ejercicio N°7:
+
+En este ejercicio modifique los clientes para que notifiquen al servidor al finalizar con el envío de todas las apuestas (Esto sirve para que el servidor sepa cuando realizar el sorteo), y además puedan consultar sobre los ganadores del sorteo.
+
+#### Variables de entorno
+
+Se agrega `CLI_QTY` tanto al servidor como a los clientes. Esta variable contiene la cantidad de clientes generados con el script que genera el docker compose. Se utiliza para hacer validaciones del sorteo.
+
+#### Comunicación:
+
+Los mensajes que se envian del cliente hacia el servidor contienen uno de los siguientes formatos:
+
+Envio de batch de apuestas
+
+```bash
+BETS=%d;AGENCY=%s,FIRST_NAME=%s,LAST_NAME=%s,DOCUMENT=%s,BIRTHDATE=%s,NUMBER=%s;...
+```
+
+Finalización de envio de apuestas
+
+```bash
+END,AGENCY=%s
+```
+
+Consulta de ganadores
+
+```bash
+WINNERS,AGENCY=%s
+```
+
+Una vez recibido del lado del servidor, se responde con un mensaje:
+
+```bash
+RESULT=%s,MESSAGE=%s
+```
+
+Estos mensajes se reciben y se envian mediante sockets, teniendo en cuenta los short writes y short reads.
+
+#### Codigo:
+
+Para implementar esta logica, se agrega en el `servidor`:
+
+```python
+class Server
+  self._clients_qty = int(cli_qty)
+  self._finished_clients = set()
+  self._lottery_ran = False
+  self._winners = {}
+
+  def __handle_no_more_bets_msg(self, msg)
+  def __handle_get_winner_msg(self, msg)
+  def __run_lottery(self)
+```
+
+- `self._clients_qty`: Cantidad de clientes obtenida por variable de entorno. Utilizada para validar si se puede realizar la loteria.
+- `self._finished_clients`: Set de clientes que terminaron de enviar sus apuestas.
+- `self._lottery_ran`: Bool que indica si ya se ejecuto la loteria o no.
+- `self._winners`: Dict para guardar los ganadores según cliente.
+
+- `__handle_no_more_bets_msg`: Maneja el mensaje de que ya envio todas las apuestas de un cliente.
+- `__handle_get_winner_msg`: Maneja el mensaje de consulta de ganadores de un cliente.
+- `__run_lottery`: Ejecuta la loteria para obtener los ganadores.
+
+```python
+class ProtocolMessage
+  def is_no_more_bets(data: bytes)
+  def is_get_winner(data: bytes)
+  def parse_no_more_bets(data: bytes)
+  def parse_get_winner(data: bytes)
+```
+
+- `is_no_more_bets`: Valida si el mensaje es de fin de envio de apuestas.
+- `is_get_winner`: Valida si el mensaje es de consulta de ganadores.
+- `parse_no_more_bets`: Parsea el mensaje de fin de envio de apuestas.
+- `parse_get_winner`: Parsea el mensaje de fin de consulta de ganadores.
+
+Del lado del `cliente`, lo mismo, manejado con structs y funciones:
+
+```go
+type Client struct { // size=80 (0x50)
+    config   ClientConfig
+    conn     net.Conn
+    protocol *Protocol
+}
+
+func (c *Client) GetWinners() (bool, error)
+func (c *Client) GetWinnersLoop() error
+func (c *Client) NotifyNoMoreBets() error
+```
+
+- `GetWinners`: Envia mensaje al servidor para obtener los ganadores.
+- `GetWinnersLoop`: Loop, el cual ejecuta `GetWinnners` internamente tantas veces hasta que se envien los ganadores.
+- `NotifyNoMoreBets`: Envia mensaje al servidor para notificar que no tiene más apuestas pendientes de envio.
+
+```go
+type NoMoreBetsMessage struct { // size=16 (0x10)
+    AgencyID string
+}
+func (m *NoMoreBetsMessage) Serialize() []byte
+```
+
+- `Serialize`: Serializa el id de la agencia que termino de enviar apuestas.
+
+```go
+type GetWinnerMessage struct { // size=16 (0x10)
+    AgencyID string
+}
+func (m *GetWinnerMessage) Serialize() []byte
+```
+
+- `Serialize`: Serializa el id de la agencia que consulta por los ganadores.
+
+#### Ejemplo de uso:
+
+Agregar los archivos con apuestas para cada servidor. Donde `N` es el `ID` del cliente.
+
+El formato de cada registro debe ser de la siguiente manera: `NOMBRE,APELLIDO,DOCUMENTO,NACIMIENTO,NUMERO`
+
+```bash
+.data/agency-{N}.csv
+```
+
+Generar docker compose con un servidor y N clientes
+
+```bash
+./generar-compose.sh docker-compose-dev.yaml N
+```
+
+Levantar los servicios con Makefile
+
+```bash
+make docker-compose-up
+```
+
+En los logs se podran observar acciones del estilo:
+
+- `action: consulta_ganadores | result: success | cant_ganadores: ${CANT}`
+
+  Generado cuando el cliente consulta y obtiene los ganadores.
+
+- `action: sorteo | result: success`
+
+  Generado cuando en el servidor ejecuta la loteria.
+
+</details>
