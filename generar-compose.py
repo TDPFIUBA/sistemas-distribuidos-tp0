@@ -27,23 +27,23 @@ def generate_networks_config():
     }
 
 
-def generate_server_config(extra_conf=DEFAULT_EXTRA_CONF):
+def generate_server_config(clients_qty, extra_conf=DEFAULT_EXTRA_CONF):
     return {
         "container_name": "server",
         "image": "server:latest",
         "entrypoint": "python3 /main.py",
-        "environment": ["PYTHONUNBUFFERED=1"],
+        "environment": ["PYTHONUNBUFFERED=1", f"CLI_QTY={clients_qty}"],
         "volumes": ["./server/config.ini:/config.ini"],
         **extra_conf,
     }
 
 
-def generate_client_config(client_n, extra_conf=DEFAULT_EXTRA_CONF):
+def generate_client_config(client_n, clients_qty, extra_conf=DEFAULT_EXTRA_CONF):
     return {
         "container_name": f"client{client_n}",
         "image": "client:latest",
         "entrypoint": "/client",
-        "environment": [f"CLI_ID={client_n}"],
+        "environment": [f"CLI_ID={client_n}", f"CLI_QTY={clients_qty}"],
         "volumes": [
             "./client/config.yaml:/config.yaml",
             f"./.data/agency-{client_n}.csv:/data/agency.csv",
@@ -56,7 +56,7 @@ def generate_clients_config(
     clients_qty=DEFAULT_CLIENTS_QTY, extra_conf=DEFAULT_EXTRA_CONF
 ):
     return {
-        f"client{n}": generate_client_config(n, extra_conf)
+        f"client{n}": generate_client_config(n, clients_qty, extra_conf)
         for n in range(1, clients_qty + 1)
     }
 
@@ -67,7 +67,7 @@ def generate_yaml_config(clients_qty=DEFAULT_CLIENTS_QTY):
     return {
         "name": COMPOSE_NAME,
         "services": {
-            "server": generate_server_config(system_networks),
+            "server": generate_server_config(clients_qty, system_networks),
             **generate_clients_config(
                 clients_qty, {**system_networks, "depends_on": ["server"]}
             ),

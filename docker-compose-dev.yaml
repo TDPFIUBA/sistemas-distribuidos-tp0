@@ -6,6 +6,7 @@ services:
     entrypoint: python3 /main.py
     environment:
       - PYTHONUNBUFFERED=1
+      - CLI_QTY=2
     volumes:
       - ./server/config.ini:/config.ini
     networks: &id001
@@ -16,12 +17,25 @@ services:
     entrypoint: /client
     environment:
       - CLI_ID=1
+      - CLI_QTY=2
     volumes:
       - ./client/config.yaml:/config.yaml
       - ./.data/agency-1.csv:/data/agency.csv
     networks: *id001
-    depends_on:
+    depends_on: &id002
       - server
+  client2:
+    container_name: client2
+    image: client:latest
+    entrypoint: /client
+    environment:
+      - CLI_ID=2
+      - CLI_QTY=2
+    volumes:
+      - ./client/config.yaml:/config.yaml
+      - ./.data/agency-2.csv:/data/agency.csv
+    networks: *id001
+    depends_on: *id002
 networks:
   testing_net:
     ipam:
