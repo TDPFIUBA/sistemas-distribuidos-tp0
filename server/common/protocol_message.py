@@ -27,6 +27,54 @@ class ProtocolMessage:
         return response + ProtocolMessage.END_MESSAGE
 
     @staticmethod
+    def message_starts_with(data: bytes, prefix: str) -> bool:
+        """Check if the message starts with a prefix"""
+        try:
+            data_str = ProtocolMessage.bytes_to_str(data)
+            return data_str.startswith(prefix)
+        except:
+            return False
+
+    @staticmethod
+    def is_no_more_bets(data: bytes) -> bool:
+        """Check if this is a no more bets message"""
+        return ProtocolMessage.message_starts_with(data, "END")
+
+    @staticmethod
+    def is_get_winner(data: bytes) -> bool:
+        """Check if this is a get winner message"""
+        return ProtocolMessage.message_starts_with(data, "WINNERS")
+    
+    @staticmethod
+    def parse_agency_from_message(data: bytes) -> str:
+        """Parse ID from message"""
+        data_str = ProtocolMessage.bytes_to_str(data)
+        parts = data_str.split(",")
+        for part in parts:
+            if part.startswith("AGENCY="):
+                return part.split("=", 1)[1]
+        return None
+
+
+    @staticmethod
+    def parse_no_more_bets(data: bytes) -> str:
+        """Parse ID from no more bets message"""
+        try:
+            return ProtocolMessage.parse_agency_from_message(data)
+        except Exception as e:
+            logging.error(f"action: parse_no_more_bets | result: fail | error: {e}")
+            return None
+
+    @staticmethod
+    def parse_get_winner(data: bytes) -> str:
+        """Parse ID from get winner message"""
+        try:
+            return ProtocolMessage.parse_agency_from_message(data)
+        except Exception as e:
+            logging.error(f"action: parse_get_winner | result: fail | error: {e}")
+            return None
+
+    @staticmethod
     def deserialize_bet(data: str) -> Bet:
         """Deserializes bet data from a string format KEY=VALUE,KEY=VALUE,..."""
         try:

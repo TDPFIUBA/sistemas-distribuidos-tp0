@@ -173,7 +173,84 @@ func (c *Client) SendBetsInBatches() error {
 		}
 	}
 
+	if err := c.NotifyNoMoreBets(); err != nil {
+		return err
+	}
+
+	return c.GetWinnersLoop()
+}
+
+func (c *Client) NotifyNoMoreBets() error {
+	if err := c.CreateClientSocket(); err != nil {
+		return err
+	}
+	defer c.CloseConnection()
+
+	msg := NewNoMoreBetsMessage(c.config.ID)
+	if err := c.protocol.SendMessage(msg.Serialize()); err != nil {
+		log.Errorf("action: no_more_bets_send | result: fail | client_id: %v | error: %v",
+			c.config.ID, err)
+		return err
+	}
+
+	data, err := c.protocol.ReceiveMessage()
+	if err != nil {
+		log.Errorf("action: no_more_bets_receive | result: fail | client_id: %v | error: %v",
+			c.config.ID, err)
+		return err
+	}
+
+	responseMsg := ParseResponseMessage(data)
+	log.Infof("action: no_more_bets_receive | result: %s | client_id: %v | message: %s",
+		responseMsg.Result, c.config.ID, responseMsg.Message)
+
 	return nil
+}
+
+func (c *Client) GetWinnersLoop() error {
+	for {
+		winners, err := c.GetWinners()
+		if err != nil {
+			return err
+		}
+
+		if winners {
+			return nil
+		}
+
+		time.Sleep(c.config.LoopPeriod)
+	}
+}
+
+func (c *Client) GetWinners() (bool, error) {
+	if err := c.CreateClientSocket(); err != nil {
+		return false, err
+	}
+	defer c.CloseConnection()
+
+	queryMsg := NewGetWinnerMessage(c.config.ID)
+	if err := c.protocol.SendMessage(queryMsg.Serialize()); err != nil {
+		log.Errorf("action: get_winners | result: fail | client_id: %v | error: %v",
+			c.config.ID, err)
+		return false, err
+	}
+
+	responseData, err := c.protocol.ReceiveMessage()
+	if err != nil {
+		log.Errorf("action: get_winners_receive | result: fail | client_id: %v | error: %v",
+			c.config.ID, err)
+		return false, err
+	}
+
+	winnersMsg := ParseResponseMessage(responseData)
+	if winnersMsg.Result == "success" {
+		log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d",
+			winnersMsg.Message)
+
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (c *Client) StartClientLoop() {

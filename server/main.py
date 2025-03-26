@@ -35,6 +35,9 @@ def initialize_config():
         config_params["logging_level"] = os.getenv(
             "LOGGING_LEVEL", config["DEFAULT"]["LOGGING_LEVEL"]
         )
+        config_params["cli_qty"] = os.getenv(
+            "CLI_QTY", config["DEFAULT"]["CLI_QTY"]
+        )
     except KeyError as e:
         raise KeyError("Key was not found. Error: {} .Aborting server".format(e))
     except ValueError as e:
@@ -51,6 +54,7 @@ def main():
         logging_level = config_params["logging_level"]
         port = config_params["port"]
         listen_backlog = config_params["listen_backlog"]
+        cli_qty = config_params["cli_qty"]
 
         initialize_log(logging_level)
 
@@ -62,7 +66,7 @@ def main():
         )
 
         # Initialize server and start server loop
-        server = Server(port, listen_backlog)
+        server = Server(port, listen_backlog, cli_qty)
         server.run()
     except Exception as e:
         logging.error(f"action: main | result: fail | error: {e}")

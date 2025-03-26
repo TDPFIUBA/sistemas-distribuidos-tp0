@@ -80,6 +80,36 @@ func (m *BatchBetMessage) Serialize() []byte {
 	return []byte(result + MESSAGE_END)
 }
 
+type NoMoreBetsMessage struct {
+	AgencyID string
+}
+
+func NewNoMoreBetsMessage(agencyID string) *NoMoreBetsMessage {
+	return &NoMoreBetsMessage{
+		AgencyID: agencyID,
+	}
+}
+
+func (m *NoMoreBetsMessage) Serialize() []byte {
+	msg := fmt.Sprintf("END,AGENCY=%s%s", m.AgencyID, MESSAGE_END)
+	return []byte(msg)
+}
+
+type GetWinnerMessage struct {
+	AgencyID string
+}
+
+func NewGetWinnerMessage(agencyID string) *GetWinnerMessage {
+	return &GetWinnerMessage{
+		AgencyID: agencyID,
+	}
+}
+
+func (m *GetWinnerMessage) Serialize() []byte {
+	msg := fmt.Sprintf("WINNERS,AGENCY=%s%s", m.AgencyID, MESSAGE_END)
+	return []byte(msg)
+}
+
 type ResponseMessage struct {
 	Result  string
 	Message string
