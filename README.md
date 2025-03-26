@@ -530,3 +530,93 @@ En los logs se podran observar acciones del estilo:
   Generado cuando en el servidor ejecuta la loteria.
 
 </details>
+
+## Parte 3: Repaso de Concurrencia
+
+#### Dependencias
+
+- Python >= 3.13
+
+#### Ejercicios
+
+<details>
+
+<summary>Ejercicio 8</summary>
+
+### Ejercicio N°8:
+
+En este ejercicio modifiqué el servidor (multiprocessing), para atender múltiples clientes simultáneamente de forma concurrente.
+
+#### Cambios principales:
+
+##### Multiprocessing para manejo de clientes:
+
+- Cada conexión de cliente es ejecutada en su propio proceso independiente
+- De secuencial a paralelo usando `multiprocessing.Process`
+
+##### Variables compartidas:
+
+- Utilicé `Manager` y `Lock` de `multiprocessing` para crear variables compartidas entre procesos:
+  ```python
+  manager = Manager()
+  self._lock = Lock()
+  self._finished_clients = manager.dict()
+  self._lottery_ran = manager.Value('b', False)
+  self._winners = manager.dict()
+  ```
+
+##### Sincronización:
+
+- Implementé locks para proteger el acceso a recursos compartidos:
+  ```python
+  with self._lock:
+  ```
+
+##### Acceso a archivos:
+
+- Agregué un lock global para hacer las operaciones de archivo seguras entre procesos:
+  ```python
+  _file_lock = multiprocessing.Lock()
+  ```
+- Modifiqué `store_bets` y `load_bets` para utilizar este lock
+
+##### Cambios en manejo de conexiones:
+
+- Eliminé `self._client_socket` ya que ahora cada proceso maneja su propia conexión
+- Modifiqué el método `__handle_client_connection` para recibir el socket del cliente como parámetro
+- Implementé un pool de procesos:
+  ```python
+  self._process_pool = multiprocessing.Pool(processes=self._clients_qty)
+  ```
+
+##### Cierre ordenado:
+
+- Agregué cierre del pool de procesos en el handle del SIGTERM:
+  ```python
+  self._process_pool.close()
+  self._process_pool.join()
+  ```
+
+#### Ejemplo de uso:
+
+Agregar los archivos con apuestas para cada servidor. Donde `N` es el `ID` del cliente.
+
+El formato de cada registro debe ser de la siguiente manera: `NOMBRE,APELLIDO,DOCUMENTO,NACIMIENTO,NUMERO`
+
+```bash
+.data/agency-{N}.csv
+```
+
+Generar docker compose con un servidor y N clientes
+
+```bash
+./generar-compose.sh docker-compose-dev.yaml N
+```
+
+Levantar los servicios con Makefile
+
+```bash
+make docker-compose-up
+```
+
+</details>
