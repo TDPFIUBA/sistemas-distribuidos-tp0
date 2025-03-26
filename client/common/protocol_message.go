@@ -5,6 +5,11 @@ import (
 	"strings"
 )
 
+const (
+	MESSAGE_END             = "\n"
+	MESSAGE_BATCH_SEPARATOR = ";"
+)
+
 type BetMessage struct {
 	Agency    string
 	FirstName string
@@ -34,7 +39,45 @@ func (m *BetMessage) Serialize() []byte {
 		m.Birthdate,
 		m.Number)
 
-	return []byte(betData + "\n")
+	return []byte(betData + MESSAGE_END)
+}
+
+type BatchBetMessage struct {
+	Bets []*BetMessage
+}
+
+func NewBatchBetMessage() *BatchBetMessage {
+	return &BatchBetMessage{
+		Bets: make([]*BetMessage, 0),
+	}
+}
+
+func (m *BatchBetMessage) AddBet(bet *BetMessage) {
+	m.Bets = append(m.Bets, bet)
+}
+
+func (m *BatchBetMessage) Serialize() []byte {
+	if len(m.Bets) == 0 {
+		return []byte("BETS=0" + MESSAGE_END)
+	}
+
+	result := fmt.Sprintf("BETS=%d;", len(m.Bets))
+	for i, bet := range m.Bets {
+		betData := fmt.Sprintf("AGENCY=%s,FIRST_NAME=%s,LAST_NAME=%s,DOCUMENT=%s,BIRTHDATE=%s,NUMBER=%s",
+			bet.Agency,
+			bet.FirstName,
+			bet.LastName,
+			bet.Document,
+			bet.Birthdate,
+			bet.Number)
+
+		result += betData
+		if i < len(m.Bets)-1 {
+			result += MESSAGE_BATCH_SEPARATOR
+		}
+	}
+
+	return []byte(result + MESSAGE_END)
 }
 
 type ResponseMessage struct {

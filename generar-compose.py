@@ -43,8 +43,11 @@ def generate_client_config(client_n, extra_conf=DEFAULT_EXTRA_CONF):
         "container_name": f"client{client_n}",
         "image": "client:latest",
         "entrypoint": "/client",
-        "environment": [f"CLI_ID={client_n}", "NOMBRE=Santiago Lionel","APELLIDO=Lorca","DOCUMENTO=30904465","NACIMIENTO=1999-03-17","NUMERO=7574"],
-        "volumes": ["./client/config.yaml:/config.yaml"],
+        "environment": [f"CLI_ID={client_n}"],
+        "volumes": [
+            "./client/config.yaml:/config.yaml",
+            f"./.data/agency-{client_n}.csv:/data/agency.csv",
+        ],
         **extra_conf,
     }
 

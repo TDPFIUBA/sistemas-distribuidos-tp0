@@ -4,7 +4,6 @@ import signal
 from common.protocol_message import ProtocolMessage
 from common.protocol import Protocol
 from common.utils import Bet, store_bets
-from typing import Optional
 
 
 class Server:
@@ -73,17 +72,17 @@ class Server:
                 f"action: receive_message | result: success | ip: {addr[0]}  | msg: {msg}"
             )
 
-            bet = ProtocolMessage.deserialize_bet(msg)
-            bet_saved, bet_msg = self.__process_bet(bet)
+            bets = ProtocolMessage.deserialize_bets_batch(msg)
+            best_saved, bets_msg = self.__process_bet_batch(bets)
 
-            response = ProtocolMessage.serialize_response(bet_saved, bet_msg)
+            response = ProtocolMessage.serialize_response(best_saved, bets_msg)
             Protocol.send_message(self._client_socket, response)
 
         except Exception as e:
             logging.error(f"action: receive_message | result: fail | error: {e}")
             try:
                 error_response = ProtocolMessage.serialize_response(
-                    False, f"Error processing bet: {str(e)}"
+                    False, f"Error processing bets: {str(e)}"
                 )
                 Protocol.send_message(self._client_socket, error_response)
             except:
@@ -91,21 +90,32 @@ class Server:
         finally:
             self._client_socket = self.__release_socket(self._client_socket)
 
-    def __process_bet(self, bet: Optional[Bet]):
+    def __process_bet_batch(self, bets: list[Bet]):
         """
-        Process a bet
+        Process a batch of bets
 
-        If the bet is valid, it is stored in the file system.
-        If the bet is not valid, an error message is returned.
+        If all bets are valid, they are stored in the file system.
+        If any bet is invalid, an error message is returned.
         """
-        if not bet:
-            return False, "Invalid bet data"
+        if not bets:
+            logging.error("action: apuesta_recibida | result: fail | cantidad: 0")
+            return False, "No valid bets in batch"
 
-        store_bets([bet])
+        bet_count = len(bets)
+
+        for bet in bets:
+            if not bet:
+                logging.error(
+                    f"action: apuesta_recibida | result: fail | cantidad: {bet_count}"
+                )
+                return False, "Invalid bet data in batch"
+
+        store_bets(bets)
+
         logging.info(
-            f"action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}"
+            f"action: apuesta_recibida | result: success | cantidad: {bet_count}"
         )
-        return True, "Bet successfully registered"
+        return True, f"Successfully processed {bet_count} bets"
 
     def __accept_new_connection(self):
         """
