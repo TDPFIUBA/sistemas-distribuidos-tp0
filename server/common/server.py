@@ -1,6 +1,8 @@
 import socket
 import logging
 import signal
+import multiprocessing
+from multiprocessing import Process, Manager, Lock
 from common.protocol_message import ProtocolMessage
 from common.protocol import Protocol
 from common.utils import Bet, store_bets, load_bets, has_won
@@ -14,13 +16,16 @@ class Server:
         self._server_socket.listen(listen_backlog)
         self._server_is_running = True
 
-        self._client_socket = None
         self._clients_qty = int(cli_qty)
         
-        self._finished_clients = set()
-        self._lottery_ran = False
-        self._winners = {}
-
+        manager = Manager()
+        self._lock = Lock()
+        self._finished_clients = manager.dict()
+        self._lottery_ran = manager.Value('b', False)
+        self._winners = manager.dict()
+        
+        self._process_pool = multiprocessing.Pool(processes=self._clients_qty)
+        
         self.__set_up_signal_handler()
 
     def __release_socket(self, release_socket):
@@ -29,7 +34,7 @@ class Server:
                 release_socket.shutdown(socket.SHUT_RDWR)
                 release_socket.close()
             except Exception as e:
-                logging.error("action: socket_release | result: fail | error: {e}")
+                logging.error(f"action: socket_release | result: fail | error: {e}")
         return None
 
     def __set_up_signal_handler(self):
@@ -45,26 +50,32 @@ class Server:
         logging.info("action: sigterm_signal | result: in_progress")
         try:
             self._server_is_running = False
-            self._client_socket = self.__release_socket(self._client_socket)
             self._server_socket = self.__release_socket(self._server_socket)
+            self._process_pool.close()
+            self._process_pool.join()
             logging.info("action: sigterm_signal | result: success")
         except Exception as e:
-            logging.error("action: sigterm_signal | result: fail | error: {e}")
+            logging.error(f"action: sigterm_signal | result: fail | error: {e}")
 
     def run(self):
         """
-        Dummy Server loop
+        Server main loop
 
-        Server that accept a new connections and establishes a
-        communication with a client. After client with communucation
-        finishes, servers starts to accept new connections again
+        Accepts new connections and create a new process for each client connection
         """
         while self._server_is_running:
-            self._client_socket = self.__accept_new_connection()
-            if self._client_socket:
-                self.__handle_client_connection()
+            try:
+                client_socket = self.__accept_new_connection()
+                if client_socket:
+                    process = Process(target=self.__handle_client_connection, args=(client_socket,))
+                    process.daemon = True
+                    process.start()
+            except Exception as e:
+                logging.error(f"action: server_run | result: fail | error: {e}")
+                if not self._server_is_running:
+                    break
 
-    def __handle_client_connection(self):
+    def __handle_client_connection(self, client_socket):
         """
         Read message from a specific client socket and closes the socket
 
@@ -72,21 +83,21 @@ class Server:
         client socket will also be closed
         """
         try:
-            msg = Protocol.receive_message(self._client_socket)
-            addr = self._client_socket.getpeername()
+            msg = Protocol.receive_message(client_socket)
+            addr = client_socket.getpeername()
             logging.info(
                 f"action: receive_message | result: success | ip: {addr[0]}  | msg: {msg}"
             )
 
             if ProtocolMessage.is_no_more_bets(msg):
-                self.__handle_no_more_bets_msg(msg)
+                self.__handle_no_more_bets_msg(msg, client_socket)
             elif ProtocolMessage.is_get_winner(msg):
-                self.__handle_get_winner_msg(msg)
+                self.__handle_get_winner_msg(msg, client_socket)
             else:
                 bets = ProtocolMessage.deserialize_bets_batch(msg)
                 best_saved, bets_msg = self.__process_bet_batch(bets)
                 response = ProtocolMessage.serialize_response(best_saved, bets_msg)
-                Protocol.send_message(self._client_socket, response)
+                Protocol.send_message(client_socket, response)
 
         except Exception as e:
             logging.error(f"action: receive_message | result: fail | error: {e}")
@@ -94,47 +105,53 @@ class Server:
                 error_response = ProtocolMessage.serialize_response(
                     False, f"Error processing req: {str(e)}"
                 )
-                Protocol.send_message(self._client_socket, error_response)
+                Protocol.send_message(client_socket, error_response)
             except:
                 logging.error("action: send_error_response | result: fail")
         finally:
-            self._client_socket = self.__release_socket(self._client_socket)
+            self.__release_socket(client_socket)
 
-    def __handle_no_more_bets_msg(self, msg):
+    def __handle_no_more_bets_msg(self, msg, client_socket):
         """Handle agency no more bets"""
         try:
             c_id = ProtocolMessage.parse_no_more_bets(msg)
             if not c_id:
                 raise ValueError("Invalid handle_no_more_bets msg format")
             
-            self._finished_clients.add(c_id)
-            logging.info(f"action: handle_no_more_bets | result: success | agency: {c_id} | total_agencies: {len(self._finished_clients)}")
+            with self._lock:
+                self._finished_clients[c_id] = True
+                finished_count = len(self._finished_clients)
+                should_run_lottery = finished_count == self._clients_qty and not self._lottery_ran.value
             
-            if len(self._finished_clients) == self._clients_qty and not self._lottery_ran:
+            logging.info(f"action: handle_no_more_bets | result: success | agency: {c_id} | total_agencies: {finished_count}")
+            
+            if should_run_lottery:
                 self.__run_lottery()
             
             response = ProtocolMessage.serialize_response(True, "No more bets msg received")
-            Protocol.send_message(self._client_socket, response)
+            Protocol.send_message(client_socket, response)
             
         except Exception as e:
             logging.error(f"action: handle_no_more_bets | result: fail | error: {e}")
             raise
 
-    def __handle_get_winner_msg(self, msg):
+    def __handle_get_winner_msg(self, msg, client_socket):
         """Handle get winner"""
         try:
             c_id = ProtocolMessage.parse_get_winner(msg)
             if not c_id:
                 raise ValueError("Invalid handle_get_winner msg format")
             
-            if not self._lottery_ran:
-                response = ProtocolMessage.serialize_response(False, "0")
-                Protocol.send_message(self._client_socket, response)
-                return
+            with self._lock:
+                lottery_ran = self._lottery_ran.value
+                winners = list(self._winners.get(c_id, [])) if self._lottery_ran.value else []
             
-            winners = self._winners.get(c_id, [])
-            response = ProtocolMessage.serialize_response(True, f"{len(winners)}")
-            Protocol.send_message(self._client_socket, response)
+            if not lottery_ran:
+                response = ProtocolMessage.serialize_response(False, "0")
+            else:
+                response = ProtocolMessage.serialize_response(True, f"{len(winners)}")
+                
+            Protocol.send_message(client_socket, response)
             
         except Exception as e:
             logging.error(f"action: handle_get_winner | result: fail | error: {e}")
@@ -142,16 +159,24 @@ class Server:
 
     def __run_lottery(self):
         """Run lottery when all agencies have reported"""
-        try:           
-            self._winners = {}
-            for bet in load_bets():
-                if has_won(bet):
-                    c_id = str(bet.agency)
-                    if c_id not in self._winners:
-                        self._winners[c_id] = []
-                    self._winners[c_id].append(bet.document)
-            
-            self._lottery_ran = True
+        try:
+            with self._lock:
+                if self._lottery_ran.value:
+                    return
+                
+                winners = {}
+                for bet in load_bets():
+                    if has_won(bet):
+                        c_id = str(bet.agency)
+                        if c_id not in winners:
+                            winners[c_id] = []
+                        winners[c_id].append(bet.document)
+                
+                for key, value in winners.items():
+                    self._winners[key] = value
+                
+                self._lottery_ran.value = True
+                
             logging.info("action: sorteo | result: success")
                 
         except Exception as e:

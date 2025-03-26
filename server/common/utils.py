@@ -1,18 +1,18 @@
 import csv
 import datetime
-import time
+import multiprocessing
 
-
-""" Bets storage location. """
 STORAGE_FILEPATH = "./bets.csv"
-""" Simulated winner number in the lottery contest. """
+""" Bets storage location. """
+
 LOTTERY_WINNER_NUMBER = 7574
+""" Simulated winner number in the lottery contest. """
 
-
-""" A lottery bet registry. """
-
+_file_lock = multiprocessing.Lock()
+""" Lock to ensure process-safe file access. """
 
 class Bet:
+    """ A lottery bet registry. """
     def __init__(
         self,
         agency: str,
@@ -35,43 +35,40 @@ class Bet:
         self.number = int(number)
 
 
-""" Checks whether a bet won the prize or not. """
 
 
 def has_won(bet: Bet) -> bool:
+    """ Checks whether a bet won the prize or not. """
     return bet.number == LOTTERY_WINNER_NUMBER
 
 
-"""
-Persist the information of each bet in the STORAGE_FILEPATH file.
-Not thread-safe/process-safe.
-"""
-
-
 def store_bets(bets: list[Bet]) -> None:
-    with open(STORAGE_FILEPATH, "a+") as file:
-        writer = csv.writer(file, quoting=csv.QUOTE_MINIMAL)
-        for bet in bets:
-            writer.writerow(
-                [
-                    bet.agency,
-                    bet.first_name,
-                    bet.last_name,
-                    bet.document,
-                    bet.birthdate,
-                    bet.number,
-                ]
-            )
-
-
-"""
-Loads the information all the bets in the STORAGE_FILEPATH file.
-Not thread-safe/process-safe.
-"""
-
+    """
+    Persist the information of each bet in the STORAGE_FILEPATH file.
+    Process-safe implementation.
+    """
+    with _file_lock:
+        with open(STORAGE_FILEPATH, "a+") as file:
+            writer = csv.writer(file, quoting=csv.QUOTE_MINIMAL)
+            for bet in bets:
+                writer.writerow(
+                    [
+                        bet.agency,
+                        bet.first_name,
+                        bet.last_name,
+                        bet.document,
+                        bet.birthdate,
+                        bet.number,
+                    ]
+                )
 
 def load_bets() -> list[Bet]:
-    with open(STORAGE_FILEPATH, "r") as file:
-        reader = csv.reader(file, quoting=csv.QUOTE_MINIMAL)
-        for row in reader:
-            yield Bet(row[0], row[1], row[2], row[3], row[4], row[5])
+    """
+    Loads the information all the bets in the STORAGE_FILEPATH file.
+    Process-safe implementation.
+    """
+    with _file_lock:
+        with open(STORAGE_FILEPATH, "r") as file:
+            reader = csv.reader(file, quoting=csv.QUOTE_MINIMAL)
+            for row in reader:
+                yield Bet(row[0], row[1], row[2], row[3], row[4], row[5])
