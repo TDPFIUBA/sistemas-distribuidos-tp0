@@ -268,3 +268,115 @@ En los logs se podran observar acciones del estilo:
   Generado cuando el servidor almacena la apuesta
 
 </details>
+
+<details>
+
+<summary>Ejercicio 6</summary>
+
+### Ejercicio N°6:
+
+En este ejercicio implemente la comunicacion cliente-servidor, en la cual el cliente le envia al servidor los datos necesarios para realizar una apuesta o varias apuestas utilizando batches de estas.
+
+En primer lugar, defini la comunicación con el protocolo (reutilizando lo generado para el ej5).
+
+- Los datos para realizar una apuesta son: `NOMBRE`, `APELLIDO`, `DOCUMENTO`, `NACIMIENTO` y `NUMERO`.
+- Estos datos se obtienen por medio de los registros de los archivos CSV.
+
+#### Archivo de apuestas:
+
+Para esto, se deben leer los datos del CSV asignado para el cliente, donde cada registro tiene una estructura:
+
+```python
+"Santiago Lionel,Lorca,30904465,1999-03-17,7574"
+```
+
+Este debe ser agregado en la carpeta `.data`, donde gracias a la generación de docker compose, se montara automaticamente.
+
+```python
+f"./.data/agency-{client_n}.csv:/data/agency.csv",
+```
+
+#### Comunicación:
+
+Los datos se envian del cliente hacia el servidor en el siguiente formato:
+
+```bash
+BETS=%d;AGENCY=%s,FIRST_NAME=%s,LAST_NAME=%s,DOCUMENT=%s,BIRTHDATE=%s,NUMBER=%s;...
+```
+
+Una vez recibido del lado del servidor, la apuesta se guarda, y se responde con un mensaje:
+
+```bash
+RESULT=%s,MESSAGE=%s\n
+```
+
+Estos mensajes se reciben y se envian mediante sockets, teniendo en cuenta los short writes y short reads.
+
+#### Codigo:
+
+Para implementar esta logica, el `servidor` tiene una clase `Protocol` que maneja y encapsula esto:
+
+```python
+class Server
+  def __process_bet_batch(self, bets: list[Bet])
+```
+
+- `__process_bet_batch`: Valida cantidades y guarda en caso exitoso
+
+```python
+class ProtocolMessage
+  def deserialize_bets_batch(data: bytes)
+```
+
+- `deserialize_bets_batch`: Deserializa el batch, separandolo y utilizando el método `deserialize_bet` para cada una de ellas.
+
+Del lado del `cliente`, lo mismo, manejado con structs y funciones:
+
+```go
+type BatchBetMessage struct { // size=24 (0x18)
+    Bets []*BetMessage
+}
+func (m *BatchBetMessage) AddBet(bet *BetMessage)
+func (m *BatchBetMessage) Serialize() []byte
+```
+
+- `AddBet`: Agrega una apuesta al listado de apuestas del batch.
+- `Serialize`: Serializa el batch a bytes para el envio.
+
+#### Variables de entorno
+
+Se agrega `batch.maxAmount` y se eliminan `NOMBRE`, `APELLIDO`, `DOCUMENTO`, `NACIMIENTO` y `NUMERO`
+
+#### Ejemplo de uso:
+
+Agregar los archivos con apuestas para cada servidor. Donde `N` es el `ID` del cliente.
+
+El formato de cada registro debe ser de la siguiente manera: `NOMBRE,APELLIDO,DOCUMENTO,NACIMIENTO,NUMERO`
+
+```bash
+.data/agency-{N}.csv
+```
+
+Generar docker compose con un servidor y N clientes
+
+```bash
+./generar-compose.sh docker-compose-dev.yaml N
+```
+
+Levantar los servicios con Makefile
+
+```bash
+make docker-compose-up
+```
+
+En los logs se podran observar acciones del estilo:
+
+- `action: apuesta_recibida | result: success | cantidad: ${CANTIDAD_DE_APUESTAS}`
+
+  Generado cuando en el servidor todas las apuestas del batch fueron procesadas correctamente
+
+- `action: apuesta_recibida | result: fail | cantidad: ${CANTIDAD_DE_APUESTAS}`
+
+  Generado cuando en el servidor se detecta un error con alguna de las apuestas
+
+</details>
