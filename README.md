@@ -347,6 +347,8 @@ func (m *BatchBetMessage) Serialize() []byte
 
 Se agrega `batch.maxAmount` y se eliminan `NOMBRE`, `APELLIDO`, `DOCUMENTO`, `NACIMIENTO` y `NUMERO`
 
+Si maxAmount supera los 8kb, se setea como maximo, MAX_BETS_PER_BATCH = 80
+
 #### Ejemplo de uso:
 
 Agregar los archivos con apuestas para cada servidor. Donde `N` es el `ID` del cliente.
