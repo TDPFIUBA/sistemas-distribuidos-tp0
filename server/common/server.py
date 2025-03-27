@@ -18,11 +18,11 @@ class Server:
 
         self._clients_qty = int(cli_qty)
         
-        manager = Manager()
+        self._manager = Manager() 
         self._lock = Lock()
-        self._finished_clients = manager.dict()
-        self._lottery_ran = manager.Value('b', False)
-        self._winners = manager.dict()
+        self._finished_clients = self._manager.dict()
+        self._lottery_ran = self._manager.Value('b', False)
+        self._winners = self._manager.dict()
         
         self._process_pool = multiprocessing.Pool(processes=self._clients_qty)
         
@@ -53,6 +53,7 @@ class Server:
             self._server_socket = self.__release_socket(self._server_socket)
             self._process_pool.close()
             self._process_pool.join()
+            self._manager.shutdown()
             logging.info("action: sigterm_signal | result: success")
         except Exception as e:
             logging.error(f"action: sigterm_signal | result: fail | error: {e}")
