@@ -11,8 +11,10 @@ import (
 	"github.com/op/go-logging"
 )
 
+// MAX_BETS_PER_BATCH: 8KB / 100bytes (1bet) = 80 bets
 const (
-	CSV_BET_INFO_SIZE = 5
+	CSV_BET_INFO_SIZE  = 5
+	MAX_BETS_PER_BATCH = 80
 )
 
 var log = logging.MustGetLogger("log")
@@ -122,6 +124,10 @@ func (c *Client) SendBetsInBatches() error {
 	}
 
 	maxBetsPerBatch := c.config.BatchMaxAmount
+	if c.config.BatchMaxAmount > MAX_BETS_PER_BATCH {
+		maxBetsPerBatch = MAX_BETS_PER_BATCH
+	}
+
 	batchCount := (totalBets + maxBetsPerBatch - 1) / maxBetsPerBatch
 
 	log.Debugf("action: send_bets | batches: %d | total_bets: %d | max_per_batch: %d",
