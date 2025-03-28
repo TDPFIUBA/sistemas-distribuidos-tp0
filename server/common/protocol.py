@@ -1,5 +1,3 @@
-import logging
-from common.utils import Bet
 from common.protocol_message import ProtocolMessage
 
 
@@ -30,9 +28,7 @@ class Protocol:
         while True:
             chunk = sock.recv(Protocol.BUFFER_SIZE)
             if not chunk:
-                raise RuntimeError(
-                    "Socket connection failed before receiving complete message"
-                )
+                break
 
             data += chunk
 

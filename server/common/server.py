@@ -1,7 +1,6 @@
 import socket
 import logging
 import signal
-import multiprocessing
 from multiprocessing import Process, Manager, Lock
 from common.protocol_message import ProtocolMessage
 from common.protocol import Protocol
@@ -12,6 +11,7 @@ class Server:
     def __init__(self, port, listen_backlog, cli_qty):
         """Server initialization"""
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._server_socket.bind(("", port))
         self._server_socket.listen(listen_backlog)
         self._server_is_running = True
@@ -24,14 +24,15 @@ class Server:
         self._lottery_ran = self._manager.Value('b', False)
         self._winners = self._manager.dict()
         
-        self._process_pool = multiprocessing.Pool(processes=self._clients_qty)
-        
+        self._client_processes = []      
+
         self.__set_up_signal_handler()
 
     def __release_socket(self, release_socket):
         if release_socket:
             try:
-                release_socket.shutdown(socket.SHUT_RDWR)
+                if release_socket.fileno() != -1: 
+                    release_socket.shutdown(socket.SHUT_RDWR)
                 release_socket.close()
             except Exception as e:
                 logging.error(f"action: socket_release | result: fail | error: {e}")
@@ -51,8 +52,10 @@ class Server:
         try:
             self._server_is_running = False
             self._server_socket = self.__release_socket(self._server_socket)
-            self._process_pool.close()
-            self._process_pool.join()
+            for process in self._client_processes:
+                if process.is_alive():
+                    process.terminate()
+                    process.join(timeout=2)
             self._manager.shutdown()
             logging.info("action: sigterm_signal | result: success")
         except Exception as e:
@@ -69,48 +72,47 @@ class Server:
                 client_socket = self.__accept_new_connection()
                 if client_socket:
                     process = Process(target=self.__handle_client_connection, args=(client_socket,))
-                    process.daemon = True
+                    self._client_processes.append(process)
                     process.start()
             except Exception as e:
                 logging.error(f"action: server_run | result: fail | error: {e}")
                 if not self._server_is_running:
                     break
+        
+        for process in self._client_processes:
+            process.join()
+        
+        if self._server_socket:
+            self._server_socket = self.__release_socket(self._server_socket)
 
     def __handle_client_connection(self, client_socket):
-        """
-        Read message from a specific client socket and closes the socket
-
-        If a problem arises in the communication with the client, the
-        client socket will also be closed
-        """
+        
         try:
-            msg = Protocol.receive_message(client_socket)
             addr = client_socket.getpeername()
-            logging.info(
-                f"action: receive_message | result: success | ip: {addr[0]}  | msg: {msg}"
-            )
-
-            if ProtocolMessage.is_no_more_bets(msg):
-                self.__handle_no_more_bets_msg(msg, client_socket)
-            elif ProtocolMessage.is_get_winner(msg):
-                self.__handle_get_winner_msg(msg, client_socket)
-            else:
-                bets = ProtocolMessage.deserialize_bets_batch(msg)
-                best_saved, bets_msg = self.__process_bet_batch(bets)
-                response = ProtocolMessage.serialize_response(best_saved, bets_msg)
-                Protocol.send_message(client_socket, response)
-
+            logging.info(f"action: client_connected | result: success | ip: {addr[0]}")
+            
+            while self._server_is_running:
+                msg = Protocol.receive_message(client_socket)
+                if not msg:
+                    logging.info(f"action: client_disconnected | result: success | ip: {addr[0]}")
+                    break
+                    
+                logging.info(f"action: receive_message | result: success | ip: {addr[0]} | msg: {msg}")
+                
+                if ProtocolMessage.is_no_more_bets(msg):
+                    self.__handle_no_more_bets_msg(msg, client_socket)
+                elif ProtocolMessage.is_get_winner(msg):
+                    self.__handle_get_winner_msg(msg, client_socket)
+                else:
+                    bets = ProtocolMessage.deserialize_bets_batch(msg)
+                    best_saved, bets_msg = self.__process_bet_batch(bets)
+                    response = ProtocolMessage.serialize_response(best_saved, bets_msg)
+                    Protocol.send_message(client_socket, response)
         except Exception as e:
-            logging.error(f"action: receive_message | result: fail | error: {e}")
-            try:
-                error_response = ProtocolMessage.serialize_response(
-                    False, f"Error processing req: {str(e)}"
-                )
-                Protocol.send_message(client_socket, error_response)
-            except:
-                logging.error("action: send_error_response | result: fail")
+            logging.error(f"action: client_connection_closed | result: fail | error: {e}")             
         finally:
             self.__release_socket(client_socket)
+            logging.info(f"action: client_connection_released | result: success | ip: {addr[0]}")
 
     def __handle_no_more_bets_msg(self, msg, client_socket):
         """Handle agency no more bets"""
