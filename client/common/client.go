@@ -69,24 +69,91 @@ func (c *Client) CloseConnection() {
 	}
 }
 
-func (c *Client) ReadBetsFromCSV() ([]*BetMessage, error) {
+func (c *Client) SendBetsInBatches() error {
+	if err := c.CreateClientSocket(); err != nil {
+		return err
+	}
+	defer c.CloseConnection()
+
 	file, err := os.Open("/data/agency.csv")
 	if err != nil {
-		return nil, fmt.Errorf("failed to open bets file: %v", err)
+		return fmt.Errorf("failed to open bets file: %v", err)
 	}
 	defer file.Close()
 
-	bets := make([]*BetMessage, 0)
 	reader := csv.NewReader(file)
 	reader.Comma = ','
 
+	maxBetsPerBatch := c.getMaxBetsPerBatch()
+
+	totalBets, err := c.processBatches(reader, maxBetsPerBatch)
+	if err != nil {
+		return err
+	}
+
+	if totalBets == 0 {
+		log.Warningf("action: send_bets | result: no_bets | client_id: %v", c.config.ID)
+	}
+
+	log.Infof("action: all_batches_sent | result: success | client_id: %v | total_bets: %d",
+		c.config.ID, totalBets)
+
+	if err := c.NotifyNoMoreBets(); err != nil {
+		return err
+	}
+
+	return c.GetWinnersLoop()
+}
+
+func (c *Client) getMaxBetsPerBatch() int {
+	maxBetsPerBatch := c.config.BatchMaxAmount
+	if maxBetsPerBatch > MAX_BETS_PER_BATCH {
+		maxBetsPerBatch = MAX_BETS_PER_BATCH
+	}
+	return maxBetsPerBatch
+}
+
+func (c *Client) processBatches(reader *csv.Reader, maxBetsPerBatch int) (int, error) {
+	totalBets := 0
+	batchNumber := 1
+
 	for {
+		batch, batchSize, err := c.readBatch(reader, maxBetsPerBatch)
+		if err != nil {
+			return totalBets, err
+		}
+
+		if batchSize == 0 {
+			break
+		}
+
+		totalBets += batchSize
+
+		if err := c.sendBatch(batch, batchNumber); err != nil {
+			return totalBets, err
+		}
+
+		if batchSize == maxBetsPerBatch {
+			time.Sleep(c.config.LoopPeriod)
+		}
+
+		batchNumber++
+	}
+
+	return totalBets, nil
+}
+
+func (c *Client) readBatch(reader *csv.Reader, maxBets int) (*BatchBetMessage, int, error) {
+	batch := NewBatchBetMessage()
+	batchSize := 0
+
+	for batchSize < maxBets {
 		betInfo, err := reader.Read()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("error reading bets file: %v", err)
+			return nil, 0, fmt.Errorf("error reading bets file: %v", err)
 		}
 
 		if len(betInfo) != CSV_BET_INFO_SIZE {
@@ -102,95 +169,39 @@ func (c *Client) ReadBetsFromCSV() ([]*BetMessage, error) {
 			betInfo[3],
 			betInfo[4],
 		)
-		bets = append(bets, bet)
+
+		batch.AddBet(bet)
+		batchSize++
 	}
 
-	log.Infof("action: read_bets | result: success | client_id: %v | total_bets: %d",
-		c.config.ID, len(bets))
-
-	return bets, nil
+	return batch, batchSize, nil
 }
 
-func (c *Client) SendBetsInBatches() error {
-	bets, err := c.ReadBetsFromCSV()
+func (c *Client) sendBatch(batch *BatchBetMessage, batchNumber int) error {
+	if err := c.protocol.SendMessage(batch.Serialize()); err != nil {
+		log.Errorf("action: send_batch | result: fail | client_id: %v | batch: %d | error: %v",
+			c.config.ID, batchNumber, err)
+		return err
+	}
+
+	responseData, err := c.protocol.ReceiveMessage()
 	if err != nil {
+		log.Errorf("action: receive_message | result: fail | client_id: %v | batch: %d | error: %v",
+			c.config.ID, batchNumber, err)
 		return err
 	}
 
-	totalBets := len(bets)
-	if totalBets == 0 {
-		log.Warningf("action: send_bets | result: no_bets | client_id: %v", c.config.ID)
-		return nil
-	}
+	responseMsg := ParseResponseMessage(responseData)
+	log.Debugf("action: bet_response | result: %s | message: %s | batch: %d",
+		responseMsg.Result, responseMsg.Message, batchNumber)
 
-	maxBetsPerBatch := c.config.BatchMaxAmount
-	if c.config.BatchMaxAmount > MAX_BETS_PER_BATCH {
-		maxBetsPerBatch = MAX_BETS_PER_BATCH
-	}
+	log.Infof("action: batch_sent | result: %s | client_id: %v | batch: %d",
+		responseMsg.Result, c.config.ID, batchNumber)
 
-	batchCount := (totalBets + maxBetsPerBatch - 1) / maxBetsPerBatch
-
-	log.Debugf("action: send_bets | batches: %d | total_bets: %d | max_per_batch: %d",
-		batchCount, totalBets, maxBetsPerBatch)
-
-	for i := 0; i < batchCount; i++ {
-
-		start := i * maxBetsPerBatch
-		end := start + maxBetsPerBatch
-		if end > totalBets {
-			end = totalBets
-		}
-
-		batchMessage := NewBatchBetMessage()
-		for j := start; j < end; j++ {
-			batchMessage.AddBet(bets[j])
-		}
-
-		if err := c.CreateClientSocket(); err != nil {
-			return err
-		}
-
-		if err := c.protocol.SendMessage(batchMessage.Serialize()); err != nil {
-			log.Errorf("action: send_batch | result: fail | client_id: %v | batch: %d/%d | error: %v",
-				c.config.ID, i+1, batchCount, err)
-			c.CloseConnection()
-			return err
-		}
-
-		responseData, err := c.protocol.ReceiveMessage()
-		if err != nil {
-			log.Errorf("action: receive_message | result: fail | client_id: %v | batch: %d/%d | error: %v",
-				c.config.ID, i+1, batchCount, err)
-			c.CloseConnection()
-			return err
-		}
-
-		responseMsg := ParseResponseMessage(responseData)
-		log.Debugf("action: bet_response | result: %s | message: %s | batch: %d/%d",
-			responseMsg.Result, responseMsg.Message, i+1, batchCount)
-
-		log.Infof("action: batch_sent | result: %s | client_id: %v | batch: %d/%d | bets: %d",
-			responseMsg.Result, c.config.ID, i+1, batchCount, end-start)
-
-		c.CloseConnection()
-
-		if i < batchCount-1 {
-			time.Sleep(c.config.LoopPeriod)
-		}
-	}
-
-	if err := c.NotifyNoMoreBets(); err != nil {
-		return err
-	}
-
-	return c.GetWinnersLoop()
+	return nil
 }
 
 func (c *Client) NotifyNoMoreBets() error {
-	if err := c.CreateClientSocket(); err != nil {
-		return err
-	}
-	defer c.CloseConnection()
 
 	msg := NewNoMoreBetsMessage(c.config.ID)
 	if err := c.protocol.SendMessage(msg.Serialize()); err != nil {
@@ -229,10 +240,6 @@ func (c *Client) GetWinnersLoop() error {
 }
 
 func (c *Client) GetWinners() (bool, error) {
-	if err := c.CreateClientSocket(); err != nil {
-		return false, err
-	}
-	defer c.CloseConnection()
 
 	queryMsg := NewGetWinnerMessage(c.config.ID)
 	if err := c.protocol.SendMessage(queryMsg.Serialize()); err != nil {
@@ -260,11 +267,6 @@ func (c *Client) GetWinners() (bool, error) {
 }
 
 func (c *Client) StartClientLoop() {
-	if err := c.SendBetsInBatches(); err != nil {
-		log.Errorf("action: send_bets_in_batches | result: fail | client_id: %v | error: %v",
-			c.config.ID, err)
-		return
-	}
-
+	c.SendBetsInBatches()
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 }
